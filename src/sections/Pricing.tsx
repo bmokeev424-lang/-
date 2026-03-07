@@ -87,7 +87,6 @@ const Pricing = () => {
       });
       triggers.push(headingTrigger);
 
-      // Cards animation
       const cards = cardsRef.current?.querySelectorAll('.pricing-card');
       if (cards) {
         const cardsTrigger = ScrollTrigger.create({

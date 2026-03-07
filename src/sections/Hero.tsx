@@ -12,14 +12,12 @@ const Hero = () => {
 
   useEffect(() => {
     const ctx = gsap.context(() => {
-      // Background image animation
       gsap.fromTo(
         imageRef.current,
         { scale: 1.1, opacity: 0 },
         { scale: 1, opacity: 1, duration: 1.5, ease: 'power2.out' }
       );
 
-      // Title character animation
       const titleChars = titleRef.current?.querySelectorAll('.char');
       if (titleChars) {
         gsap.fromTo(
@@ -36,21 +34,18 @@ const Hero = () => {
         );
       }
 
-      // Subtitle animation
       gsap.fromTo(
         subtitleRef.current,
         { y: 30, opacity: 0 },
         { y: 0, opacity: 1, duration: 0.8, ease: 'power3.out', delay: 1.2 }
       );
 
-      // Description animation
       gsap.fromTo(
         descRef.current,
         { opacity: 0 },
         { opacity: 1, duration: 0.8, ease: 'power2.out', delay: 1.4 }
       );
 
-      // CTA button animation
       gsap.fromTo(
         ctaRef.current,
         { scale: 0.8, opacity: 0 },
