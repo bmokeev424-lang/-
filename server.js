@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const TelegramBot = require('node-telegram-bot-api');
+const nodemailer = require('nodemailer');
 require('dotenv').config();
 
 const app = express();
@@ -9,10 +9,28 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: true });
-const ADMIN_CHAT_ID = process.env.TELEGRAM_ADMIN_CHAT_ID;
+const transporter = nodemailer.createTransporter({
+  host: process.env.SMTP_HOST || 'smtp.gmail.com',
+  port: parseInt(process.env.SMTP_PORT) || 587,
+  secure: process.env.SMTP_SECURE === 'true',
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
+
+const RECIPIENT_EMAIL = process.env.RECIPIENT_EMAIL || process.env.SMTP_USER;
 
 const applications = new Map();
+
+
+transporter.verify(function (error, success) {
+  if (error) {
+    console.error('❌ Ошибка подключения к SMTP:', error);
+  } else {
+    console.log('✅ SMTP сервер готов к отправке писем');
+  }
+});
 
 app.post('/api/apply', async (req, res) => {
   try {
@@ -30,33 +48,71 @@ app.post('/api/apply', async (req, res) => {
       createdAt: new Date().toISOString()
     });
 
-    const inlineKeyboard = {
-      inline_keyboard: [
-        [
-          { text: '✅ Одобрить', callback_data: `approve_${appId}` },
-          { text: '❌ Отклонить', callback_data: `reject_${appId}` }
-        ],
-        [
-          { text: '📞 Позвонить', callback_data: `call_${appId}` }
-        ]
-      ]
-    };
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f9f9f9;">
+        <div style="background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); padding: 30px; border-radius: 15px 15px 0 0; text-align: center;">
+          <h1 style="color: #c9a227; margin: 0; font-size: 24px;">🥋 БУСИДО - Клуб Восточных Единоборств</h1>
+          <p style="color: #fff; margin: 10px 0 0 0; font-size: 16px;">Новая заявка на пробное занятие</p>
+        </div>
 
-    const text = `
-🥋 <b>Новая заявка на пробное занятие!</b>
+        <div style="background: #fff; padding: 30px; border-radius: 0 0 15px 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+          <div style="background: #f0f0f0; padding: 15px; border-radius: 10px; margin-bottom: 20px;">
+            <p style="margin: 0; color: #666; font-size: 12px;">ID заявки: <strong>#${appId}</strong></p>
+            <p style="margin: 5px 0 0 0; color: #666; font-size: 12px;">Время: ${new Date().toLocaleString('ru-RU')}</p>
+          </div>
 
-👤 <b>Имя:</b> ${name}
-📞 <b>Телефон:</b> ${phone}
-🎯 <b>Направление:</b> ${direction || 'Не указано'}
-💬 <b>Сообщение:</b> ${message || 'Не указано'}
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+              <td style="padding: 12px 0; border-bottom: 1px solid #eee; color: #666; width: 120px;">👤 Имя:</td>
+              <td style="padding: 12px 0; border-bottom: 1px solid #eee; font-weight: bold; color: #333;">${name}</td>
+            </tr>
+            <tr>
+              <td style="padding: 12px 0; border-bottom: 1px solid #eee; color: #666;">📞 Телефон:</td>
+              <td style="padding: 12px 0; border-bottom: 1px solid #eee; font-weight: bold; color: #333;">
+                <a href="tel:${phone}" style="color: #c9a227; text-decoration: none;">${phone}</a>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 12px 0; border-bottom: 1px solid #eee; color: #666;">🎯 Направление:</td>
+              <td style="padding: 12px 0; border-bottom: 1px solid #eee; font-weight: bold; color: #333;">${direction || 'Не указано'}</td>
+            </tr>
+            <tr>
+              <td style="padding: 12px 0; color: #666; vertical-align: top;">💬 Сообщение:</td>
+              <td style="padding: 12px 0; color: #333;">${message || 'Не указано'}</td>
+            </tr>
+          </table>
 
-⏰ <b>Время заявки:</b> ${new Date().toLocaleString('ru-RU')}
+          <div style="margin-top: 30px; text-align: center;">
+            <a href="tel:${phone}" style="display: inline-block; background: linear-gradient(135deg, #c9a227 0%, #d4af37 100%); color: #1a1a1a; text-decoration: none; padding: 15px 30px; border-radius: 8px; font-weight: bold; margin: 5px;">📞 Позвонить</a>
+          </div>
+        </div>
+
+        <div style="text-align: center; padding: 20px; color: #999; font-size: 12px;">
+          <p>Это письмо отправлено автоматически с сайта Бусидо</p>
+        </div>
+      </div>
     `;
 
-    await bot.sendMessage(ADMIN_CHAT_ID, text, {
-      parse_mode: 'HTML',
-      reply_markup: inlineKeyboard
-    });
+    const mailOptions = {
+      from: `"Бусидо - Заявки" <${process.env.SMTP_USER}>`,
+      to: RECIPIENT_EMAIL,
+      subject: `🥋 Новая заявка от ${name}`,
+      html: htmlContent,
+      text: `
+Новая заявка на пробное занятие!
+
+Имя: ${name}
+Телефон: ${phone}
+Направление: ${direction || 'Не указано'}
+Сообщение: ${message || 'Не указано'}
+
+Время заявки: ${new Date().toLocaleString('ru-RU')}
+ID заявки: ${appId}
+      `,
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log(`✅ Email отправлен: заявка от ${name}`);
 
     res.json({
       success: true,
@@ -64,7 +120,7 @@ app.post('/api/apply', async (req, res) => {
       appId
     });
   } catch (error) {
-    console.error('Error sending application:', error);
+    console.error('❌ Ошибка отправки заявки:', error);
     res.status(500).json({
       success: false,
       message: 'Ошибка при отправке заявки'
@@ -72,65 +128,6 @@ app.post('/api/apply', async (req, res) => {
   }
 });
 
-bot.on('callback_query', async (query) => {
-  const chatId = query.message.chat.id;
-  const messageId = query.message.message_id;
-  const data = query.data;
-  const [action, appId] = data.split('_');
-
-  const application = applications.get(appId);
-
-  if (!application) {
-    await bot.answerCallbackQuery(query.id, { text: 'Заявка не найдена или устарела' });
-    return;
-  }
-
-  try {
-    if (action === 'approve') {
-      application.status = 'approved';
-      applications.set(appId, application);
-
-      const approvedText = query.message.text + '\n\n✅ <b>СТАТУС: ОДОБРЕНО</b>\n👤 Одобрил: ' + query.from.first_name;
-
-      await bot.editMessageText(approvedText, {
-        chat_id: chatId,
-        message_id: messageId,
-        parse_mode: 'HTML'
-      });
-
-
-      await bot.sendMessage(ADMIN_CHAT_ID,
-        `✅ Заявка ${appId} одобрена!\n\nНе забудьте связаться с клиентом:\n📞 ${application.phone}`,
-        { parse_mode: 'HTML' }
-      );
-
-      await bot.answerCallbackQuery(query.id, { text: 'Заявка одобрена!' });
-
-    } else if (action === 'reject') {
-      application.status = 'rejected';
-      applications.set(appId, application);
-
-      const rejectedText = query.message.text + '\n\n❌ <b>СТАТУС: ОТКЛОНЕНО</b>\n👤 Отклонил: ' + query.from.first_name;
-
-      await bot.editMessageText(rejectedText, {
-        chat_id: chatId,
-        message_id: messageId,
-        parse_mode: 'HTML'
-      });
-
-      await bot.answerCallbackQuery(query.id, { text: 'Заявка отклонена' });
-
-    } else if (action === 'call') {
-      await bot.answerCallbackQuery(query.id, {
-        text: `Звоним: ${application.phone}`,
-        show_alert: true
-      });
-    }
-  } catch (error) {
-    console.error('Error handling callback:', error);
-    await bot.answerCallbackQuery(query.id, { text: 'Произошла ошибка' });
-  }
-});
 
 app.get('/api/application/:id', (req, res) => {
   const app = applications.get(req.params.id);
@@ -141,20 +138,16 @@ app.get('/api/application/:id', (req, res) => {
   }
 });
 
+
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', bot: 'running' });
+  res.json({
+    status: 'ok',
+    email: 'configured',
+    recipient: RECIPIENT_EMAIL
+  });
 });
 
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`Bot initialized. Admin chat ID: ${ADMIN_CHAT_ID}`);
-});
-
-
-bot.on('error', (error) => {
-  console.error('Bot error:', error);
-});
-
-bot.on('polling_error', (error) => {
-  console.error('Polling error:', error);
+  console.log(`🚀 Сервер запущен на порту ${PORT}`);
+  console.log(`📧 Email получателя: ${RECIPIENT_EMAIL}`);
 });
