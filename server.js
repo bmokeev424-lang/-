@@ -1,5 +1,7 @@
 const express = require('express');
 const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
 require('dotenv').config();
 
 const app = express();
@@ -8,82 +10,78 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-const FORMSPREE_ENDPOINT = process.env.FORMSPREE_ENDPOINT;
+const APPLICATIONS_DIR = path.join(__dirname, 'заявки');
+
+if (!fs.existsSync(APPLICATIONS_DIR)) {
+  fs.mkdirSync(APPLICATIONS_DIR, { recursive: true });
+  console.log('✅ Создана папка для заявок:', APPLICATIONS_DIR);
+}
 
 const applications = new Map();
 
-// Проверка конфигурации при старте
-if (!FORMSPREE_ENDPOINT) {
-  console.error('❌ ОШИБКА: FORMSPREE_ENDPOINT не указан в .env файле!');
-  console.log('   Перейдите на https://formspree.io, создайте форму и скопируйте endpoint.');
-} else {
-  console.log('✅ Formspree настроен:', FORMSPREE_ENDPOINT);
-}
+console.log('✅ Сервис заявок настроен. Заявки сохраняются в папку:', APPLICATIONS_DIR);
 
 app.post('/api/apply', async (req, res) => {
   try {
     const { name, phone, message, direction } = req.body;
 
-    if (!FORMSPREE_ENDPOINT) {
-      return res.status(500).json({
+    if (!name || !phone) {
+      return res.status(400).json({
         success: false,
-        message: 'Сервис email не настроен. Укажите FORMSPREE_ENDPOINT в .env'
+        message: 'Имя и телефон обязательны для заполнения'
       });
     }
 
     const appId = Date.now().toString();
+    const createdAt = new Date().toISOString();
 
-    applications.set(appId, {
+    const application = {
       id: appId,
       name,
       phone,
       message: message || 'Не указано',
       direction: direction || 'Не указано',
-      status: 'pending',
-      createdAt: new Date().toISOString()
-    });
-
-    // Формируем сообщение для Formspree
-    const emailData = {
-      name: name,
-      phone: phone,
-      direction: direction || 'Не указано',
-      message: message || 'Не указано',
-      _subject: `🥋 Новая заявка от ${name}`,
-      _replyto: 'no-reply@busido.ru'
+      status: 'new',
+      createdAt: createdAt
     };
+    applications.set(appId, application);
 
-    // Отправляем в Formspree (используем встроенный fetch)
-    const response = await fetch(FORMSPREE_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify(emailData)
+    const dateStr = new Date().toLocaleDateString('ru-RU').replace(/\./g, '-');
+    const timeStr = new Date().toLocaleTimeString('ru-RU').replace(/:/g, '-');
+    const fileName = `zayavka_${dateStr}_${timeStr}_${appId}.txt`;
+    const filePath = path.join(APPLICATIONS_DIR, fileName);
+
+    const fileContent = `
+╔══════════════════════════════════════════════════════════════╗
+║                 НОВАЯ ЗАЯВКА - КЛУБ БУСИДО                   ║
+╠══════════════════════════════════════════════════════════════╣
+║ Дата получения: ${new Date(createdAt).toLocaleString('ru-RU')}
+╠══════════════════════════════════════════════════════════════╣
+║ Имя:           ${name}
+║ Телефон:       ${phone}
+║ Направление:   ${direction || 'Не указано'}
+╠══════════════════════════════════════════════════════════════╣
+║ Сообщение:
+║ ${message || 'Не указано'}
+╚══════════════════════════════════════════════════════════════╝
+`;
+
+    fs.writeFileSync(filePath, fileContent, 'utf8');
+
+    console.log(`✅ Заявка сохранена в файл: ${filePath}`);
+    console.log(`   От: ${name}, Тел: ${phone}`);
+
+    res.json({
+      success: true,
+      message: 'Заявка отправлена!',
+      appId
     });
-
-    if (response.ok) {
-      console.log(`✅ Заявка отправлена в Formspree: ${name}`);
-      res.json({
-        success: true,
-        message: 'Заявка отправлена!',
-        appId
-      });
-    } else {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('❌ Ошибка Formspree:', errorData);
-      res.status(500).json({
-        success: false,
-        message: 'Ошибка при отправке заявки'
-      });
-    }
 
   } catch (error) {
-    console.error('❌ Ошибка отправки заявки:', error);
+    console.error('❌ Ошибка сохранения заявки:', error);
     res.status(500).json({
       success: false,
-      message: 'Ошибка при отправке заявки'
+      message: 'Ошибка при сохранении заявки'
     });
   }
 });
@@ -98,14 +96,49 @@ app.get('/api/application/:id', (req, res) => {
 });
 
 app.get('/api/health', (req, res) => {
+  let savedApplicationsCount = 0;
+  try {
+    const files = fs.readdirSync(APPLICATIONS_DIR);
+    savedApplicationsCount = files.filter(f => f.startsWith('zayavka_') && f.endsWith('.txt')).length;
+  } catch (e) {
+    savedApplicationsCount = 0;
+  }
+
   res.json({
     status: 'ok',
-    emailService: FORMSPREE_ENDPOINT ? 'formspree configured' : 'not configured',
-    formspreeEndpoint: FORMSPREE_ENDPOINT || 'not set'
+    storage: 'local file system',
+    applicationsFolder: APPLICATIONS_DIR,
+    savedApplications: savedApplicationsCount
   });
+});
+
+app.get('/api/applications', (req, res) => {
+  try {
+    const files = fs.readdirSync(APPLICATIONS_DIR);
+    const applicationsList = files
+      .filter(f => f.startsWith('zayavka_') && f.endsWith('.txt'))
+      .map(f => ({
+        fileName: f,
+        filePath: path.join(APPLICATIONS_DIR, f),
+        createdAt: fs.statSync(path.join(APPLICATIONS_DIR, f)).mtime
+      }))
+      .sort((a, b) => b.createdAt - a.createdAt);
+
+    res.json({
+      success: true,
+      count: applicationsList.length,
+      applications: applicationsList
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Ошибка при получении списка заявок'
+    });
+  }
 });
 
 app.listen(PORT, () => {
   console.log(`🚀 Сервер запущен на порту ${PORT}`);
-  console.log(`📧 Email сервис: Formspree`);
+  console.log(`📁 Папка для заявок: ${APPLICATIONS_DIR}`);
+  console.log(`📝 Заявки сохраняются в текстовые файлы`);
 });

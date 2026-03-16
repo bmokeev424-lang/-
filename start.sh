@@ -1,4 +1,3 @@
-#!/bin/bash
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -115,10 +114,10 @@ FRONTEND_PID=$!
 echo -e "${BLUE}[⏳] Ожидание запуска фронтенда...${NC}"
 sleep 5
 
-FRONTEND_URL="http://localhost:5173"
+FRONTEND_URL="http://localhost:5175"
 
 if ! curl -s $FRONTEND_URL >/dev/null 2>&1; then
-    FRONTEND_URL="http://localhost:5174"
+    FRONTEND_URL="http://localhost:5175"
 fi
 
 echo -e "${BLUE}[🌐] Открытие браузера...${NC}"
@@ -151,5 +150,4 @@ echo ""
 echo "========================================"
 echo ""
 
-# Ждем завершения процессов
 wait $BACKEND_PID $FRONTEND_PID

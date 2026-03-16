@@ -21,8 +21,8 @@ const Footer = () => {
 
   const socialLinks = [
     { icon: <Instagram className="w-5 h-5" />, href: '#', label: 'Instagram' },
-    { icon: <Youtube className="w-5 h-5" />, href: '#', label: 'YouTube' },
-    { icon: <Send className="w-5 h-5" />, href: '#', label: 'Telegram' },
+    { icon: <Youtube className="w-5 h-5" />, href: 'https://www.youtube.com/@QWBT', label: 'YouTube' },
+    { icon: <Send className="w-5 h-5" />, href: 'https://t.me/Kion_pi_bot', label: 'Telegram' },
     { icon: <Phone className="w-5 h-5" />, href: 'tel:+79991234567', label: 'Phone' },
   ];
 
