@@ -1,11 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { MapPin, Phone, Mail, Clock, Send, CheckCircle, Loader2 } from 'lucide-react';
+import { MapPin, Phone, Mail, Clock, Send, CheckCircle, Loader2, Download } from 'lucide-react';
 
 gsap.registerPlugin(ScrollTrigger);
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 const directions = [
   { id: '', name: 'Выберите направление' },
@@ -20,7 +18,7 @@ const Contacts = () => {
   const headingRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const infoRef = useRef<HTMLDivElement>(null);
-  
+
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
@@ -33,7 +31,7 @@ const Contacts = () => {
 
   useEffect(() => {
     const triggers: ScrollTrigger[] = [];
-    
+
     const ctx = gsap.context(() => {
       const headingTrigger = ScrollTrigger.create({
         trigger: headingRef.current,
@@ -90,34 +88,56 @@ const Contacts = () => {
     };
   }, []);
 
+  // Функция для скачивания заявки как текстового файла
+  const downloadApplication = () => {
+    const dateStr = new Date().toLocaleDateString('ru-RU');
+    const timeStr = new Date().toLocaleTimeString('ru-RU');
+    const directionName = directions.find(d => d.id === formData.direction)?.name || 'Не указано';
+
+    const fileContent = `
+╔══════════════════════════════════════════════════════════════╗
+║                 НОВАЯ ЗАЯВКА - КЛУБ БУСИДО                   ║
+╠══════════════════════════════════════════════════════════════╣
+║ Дата получения: ${dateStr} ${timeStr}
+╠══════════════════════════════════════════════════════════════╣
+║ Имя:           ${formData.name}
+║ Телефон:       ${formData.phone}
+║ Направление:   ${directionName}
+╠══════════════════════════════════════════════════════════════╣
+║ Сообщение:
+║ ${formData.message || 'Не указано'}
+╚══════════════════════════════════════════════════════════════╝
+`;
+
+    const blob = new Blob([fileContent], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `zayavka_${dateStr.replace(/\./g, '-')}_${timeStr.replace(/:/g, '-')}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
 
     try {
-      const response = await fetch(`${API_URL}/api/apply`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
+      await new Promise(resolve => setTimeout(resolve, 800));
 
-      const data = await response.json();
+      downloadApplication();
 
-      if (data.success) {
-        setIsSubmitted(true);
-        setTimeout(() => {
-          setIsSubmitted(false);
-          setFormData({ name: '', phone: '', message: '', direction: '' });
-        }, 5000);
-      } else {
-        setError(data.message || 'Произошла ошибка при отправке');
-      }
+      setIsSubmitted(true);
+      setTimeout(() => {
+        setIsSubmitted(false);
+        setFormData({ name: '', phone: '', message: '', direction: '' });
+      }, 5000);
     } catch (err) {
       setError('Не удалось отправить заявку. Попробуйте позже.');
-      console.error('Submit error:', err);
+      console.error('Download error:', err);
     } finally {
       setIsLoading(false);
     }
@@ -185,10 +205,10 @@ const Contacts = () => {
               <div className="flex flex-col items-center justify-center py-12 text-center">
                 <CheckCircle className="w-16 h-16 text-[#E63946] mb-4" />
                 <h3 className="text-2xl font-bold text-white mb-2">Заявка отправлена!</h3>
-                <p className="text-white/60 mb-4">Мы рассмотрим вашу заявку и свяжемся с вами в ближайшее время</p>
+                <p className="text-white/60 mb-4">Файл заявки сохранён на вашем устройстве</p>
                 <div className="flex items-center gap-2 text-[#E63946] text-sm">
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Ожидайте звонка
+                  Отправьте нам файл удобным способом
                 </div>
               </div>
             ) : (
@@ -270,18 +290,18 @@ const Contacts = () => {
                     {isLoading ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        Отправка...
+                        Создание файла...
                       </>
                     ) : (
                       <>
-                        Отправить заявку
-                        <Send className="w-4 h-4" />
+                        Скачать заявку
+                        <Download className="w-4 h-4" />
                       </>
                     )}
                   </button>
 
                   <p className="text-white/40 text-xs text-center">
-                    Нажимая кнопку, вы соглашаетесь с политикой конфиденциальности
+                    Нажимая кнопку, вы скачаете файл заявки. Отправьте его нам удобным способом.
                   </p>
                 </div>
               </>

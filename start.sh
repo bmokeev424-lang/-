@@ -1,3 +1,4 @@
+#!/bin/bash
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -14,7 +15,7 @@ if ! command -v node &> /dev/null; then
     echo -e "${RED}[❌ ОШИБКА] Node.js не установлен!${NC}"
     echo ""
     echo "Пожалуйста, скачайте и установите Node.js:"
-    echo "https://nodejs.org"
+    echo "https://nodejs.org  "
     echo ""
     echo "Для macOS рекомендуется использовать Homebrew:"
     echo "  brew install node"
@@ -114,20 +115,31 @@ FRONTEND_PID=$!
 echo -e "${BLUE}[⏳] Ожидание запуска фронтенда...${NC}"
 sleep 5
 
-FRONTEND_URL="http://localhost:5175"
+# Получаем реальный порт из вывода Vite
+FRONTEND_URL=""
+for port in 5173 5174 5175 5176 5177; do
+    if curl -s http://localhost:$port >/dev/null 2>&1; then
+        FRONTEND_URL="http://localhost:$port"
+        break
+    fi
+done
 
-if ! curl -s $FRONTEND_URL >/dev/null 2>&1; then
-    FRONTEND_URL="http://localhost:5175"
+if [ -z "$FRONTEND_URL" ]; then
+    FRONTEND_URL="http://localhost:5173"
 fi
 
 echo -e "${BLUE}[🌐] Открытие браузера...${NC}"
 
-if command -v open &> /dev/null; then
+# Для Windows используем start, для macOS - open, для Linux - xdg-open
+if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]]; then
+    # Windows
+    start "" "$FRONTEND_URL"
+elif command -v open &> /dev/null; then
+    # macOS
     open "$FRONTEND_URL"
 elif command -v xdg-open &> /dev/null; then
+    # Linux
     xdg-open "$FRONTEND_URL"
-elif command -v gnome-open &> /dev/null; then
-    gnome-open "$FRONTEND_URL"
 else
     echo -e "${YELLOW}[⚠] Не удалось автоматически открыть браузер${NC}"
     echo "    Пожалуйста, откройте вручную: $FRONTEND_URL"
